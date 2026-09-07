@@ -1,0 +1,6 @@
+[submodule "cpp/garrysmod_common"]
+	path = cpp/garrysmod_common
+	url = https://github.com/danielga/garrysmod_common/
+[submodule "wasm3"]
+	path = wasm3
+	url = https://github.com/wasm3/wasm3
