@@ -27,13 +27,11 @@ struct M3BacktraceFrame {
 
     M3BacktraceFrame* next;
 }
-alias IM3BacktraceFrame = M3BacktraceFrame*;
 
 struct M3BacktraceInfo {
-    IM3BacktraceFrame frames;
-    IM3BacktraceFrame lastFrame;    // can be M3_BACKTRACE_TRUNCATED
+    M3BacktraceFrame* frames;
+    M3BacktraceFrame* lastFrame;    // can be M3_BACKTRACE_TRUNCATED
 }
-alias IM3BacktraceInfo = M3BacktraceInfo*;
 
 
 
@@ -155,11 +153,11 @@ extern fn double M3Runtime.get_gas_used(M3Runtime* i_runtime) @cname("m3_GetGasU
 //
 // Sizes are sz, not uint: a linear memory may be a full 4 GiB, which
 // is one byte too many to count in 32 bits.
-extern fn char* get_memory(M3Module* i_module,
+extern fn char* M3Module.get_memory(M3Module* i_module,
                                sz*   o_memorySizeInBytes,
                                uint  i_memoryIndex) @cname("m3_GetMemory");
 
-extern fn sz get_memory_size(M3Module* i_module,
+extern fn sz M3Module.get_memory_size(M3Module* i_module,
                                    uint  i_memoryIndex) @cname("m3_GetMemorySize");
 
 // Size of the memory a pointer addresses into - specifically the _mem a raw
@@ -167,13 +165,13 @@ extern fn sz get_memory_size(M3Module* i_module,
 // and need not be any particular module's. Used by m3ApiCheckMem.
 extern fn sz get_memory_size_at(void* i_memory) @cname("m3_GetMemorySizeAt");
 
-extern fn void* get_user_data(M3Runtime* i_runtime) @cname("m3_GetUserData");
+extern fn void* M3Runtime.get_user_data(M3Runtime* i_runtime) @cname("m3_GetUserData");
 
 // The index of the memory the module exports under i_name. A host module
 // whose ABI names the memory it addresses looks it up this way - WASI names
 // it "memory". Returns m3Err_unknownMemory when no memory is exported
 // under that name.
-extern fn M3Result find_exported_memory(M3Module*         i_module,
+extern fn M3Result M3Module.find_exported_memory(M3Module*         i_module,
                                         char* i_name,
                                         uint*         o_memoryIndex) @cname("m3_FindExportedMemory");
 
@@ -183,7 +181,7 @@ extern fn M3Result find_exported_memory(M3Module*         i_module,
 // so call it after linking them. Left alone, a host function addresses
 // memory 0 - what a bare i32 guest pointer means when nothing says
 // otherwise - so this is only needed by a host module that names a memory.
-extern fn M3Result bind_import_memory(M3Module*         io_module,
+extern fn M3Result M3Module.bind_import_memory(M3Module*         io_module,
                                       char* i_importModule,
                                       uint          i_memoryIndex) @cname("m3_BindImportMemory");
 
@@ -193,13 +191,13 @@ extern fn M3Result bind_import_memory(M3Module*         io_module,
 //-------------------------------------------------------------------------------------------------------------------------------
 
 // i_wasmBytes data must be persistent during the lifetime of the module
-extern fn M3Result parse_module(M3Environment*       i_environment,
+extern fn M3Result M3Environment.parse_module(M3Environment*       i_environment,
                                  M3Module**           o_module,
                                  char* i_wasmBytes,
                                  uint             i_numWasmBytes) @cname("m3_ParseModule");
 
 // Only a module that was never handed to m3_LoadModule needs to be freed.
-extern fn void free_module(M3Module* i_module) @cname("m3_FreeModule");
+extern fn void M3Module.free(M3Module* i_module) @cname("m3_FreeModule");
 
 //  Transfers ownership of the module to the runtime - whether or not it
 //  succeeds. A failed instantiation can already have written this module's
@@ -210,21 +208,21 @@ extern fn void free_module(M3Module* i_module) @cname("m3_FreeModule");
 extern fn M3Result M3Runtime.load_module(M3Runtime* io_runtime, M3Module* io_module) @cname("m3_LoadModule");
 
 // Optional, compiles all functions in the module
-extern fn M3Result compile_module(M3Module* io_module) @cname("m3_CompileModule");
+extern fn M3Result M3Module.compile(M3Module* io_module) @cname("m3_CompileModule");
 
 // Calling m3_RunStart is optional
-extern fn M3Result run_start(M3Module* i_module) @cname("m3_RunStart");
+extern fn M3Result M3Module.run_start(M3Module* i_module) @cname("m3_RunStart");
 
 // Arguments and return values are passed in and out through the stack pointer _sp.
 // Placeholder return value slots are first and arguments after. So, the first argument is at _sp [numReturns]
 // Return values should be written into _sp [0] to _sp [num_returns - 1]
-extern fn M3Result link_raw_function(M3Module*         io_module,
+extern fn M3Result M3Module.link_raw_function(M3Module*         io_module,
                                      char* i_moduleName,
                                      char* i_functionName,
                                      char* i_signature,
                                      M3RawCall         i_function) @cname("m3_LinkRawFunction");
 
-extern fn M3Result link_raw_function_ex(M3Module*         io_module,
+extern fn M3Result M3Module.link_raw_function_ex(M3Module*         io_module,
                                        char* i_moduleName,
                                        char* i_functionName,
                                        char* i_signature,
@@ -232,14 +230,14 @@ extern fn M3Result link_raw_function_ex(M3Module*         io_module,
                                        void*       i_userdata) @cname("m3_LinkRawFunctionEx");
 
 // supplies the value of an imported global, regardless of its mutability
-extern fn M3Result link_global(M3Module*            io_module,
+extern fn M3Result M3Module.link_global(M3Module*            io_module,
                                 char*    i_moduleName,
                                 char*    i_globalName,
                                 M3TaggedValue* i_value) @cname("m3_LinkGlobal");
 
-extern fn char*      get_module_name(M3Module* i_module) @cname("m3_GetModuleName");
-extern fn void set_module_name(M3Module* i_module, char* name) @cname("m3_SetModuleName");
-extern fn M3Runtime* get_module_runtime(M3Module* i_module) @cname("m3_GetModuleRuntime");
+extern fn char*      M3Module.get_name(M3Module* i_module) @cname("m3_GetModuleName");
+extern fn void M3Module.set_name(M3Module* i_module, char* name) @cname("m3_SetModuleName");
+extern fn M3Runtime* M3Module.get_runtime(M3Module* i_module) @cname("m3_GetModuleRuntime");
 
 // The module registered under i_moduleName, or NULL. Most recently loaded
 // first, so a name registered twice names the newer module.
@@ -249,16 +247,16 @@ extern fn M3Module* M3Runtime.find_module(M3Runtime*        i_runtime,
 //-------------------------------------------------------------------------------------------------------------------------------
 //  globals
 //-------------------------------------------------------------------------------------------------------------------------------
-extern fn M3Global* find_global(M3Module*         io_module,
+extern fn M3Global* M3Module.find_global(M3Module*         io_module,
                                 char* i_globalName) @cname("m3_FindGlobal");
 
-extern fn M3Result get_global(M3Global*      i_global,
+extern fn M3Result M3Global.get_value(M3Global*      i_global,
                                M3TaggedValue* o_value) @cname("m3_GetGlobal");
 
-extern fn M3Result set_global(M3Global*            i_global,
+extern fn M3Result M3Global.set_value(M3Global*            i_global,
                                M3TaggedValue* i_value) @cname("m3_SetGlobal");
 
-extern fn M3ValueType get_global_type(M3Global* i_global) @cname("m3_GetGlobalType");
+extern fn M3ValueType M3Global.get_type(M3Global* i_global) @cname("m3_GetGlobalType");
 
 //-------------------------------------------------------------------------------------------------------------------------------
 //  functions
@@ -279,26 +277,26 @@ extern fn M3Result get_table_function(M3Function** o_function,
                                       M3Module*    i_module,
                                       uint     i_index) @cname("m3_GetTableFunction");
 
-extern fn uint get_arg_count(M3Function* i_function) @cname("m3_GetArgCount");
-extern fn uint get_ret_count(M3Function* i_function) @cname("m3_GetRetCount");
-extern fn M3ValueType get_arg_type(M3Function* i_function, uint i_index) @cname("m3_GetArgType");
-extern fn M3ValueType get_ret_type(M3Function* i_function, uint i_index) @cname("m3_GetRetType");
+extern fn uint M3Function.get_arg_count(M3Function* i_function) @cname("m3_GetArgCount");
+extern fn uint M3Function.get_ret_count(M3Function* i_function) @cname("m3_GetRetCount");
+extern fn M3ValueType M3Function.get_arg_type(M3Function* i_function, uint i_index) @cname("m3_GetArgType");
+extern fn M3ValueType M3Function.get_ret_type(M3Function* i_function, uint i_index) @cname("m3_GetRetType");
 
-extern fn M3Result call_v(M3Function* i_function, ...) @cname("m3_CallV");
-extern fn M3Result call_vl(M3Function* i_function, CVaList i_args) @cname("m3_CallVL");
-extern fn M3Result call(M3Function* i_function, uint i_argc, void*[] i_argptrs) @cname("m3_Call");
-extern fn M3Result call_argv(M3Function* i_function, uint i_argc, char*[] i_argv) @cname("m3_CallArgv");
+extern fn M3Result M3Function.call_v(M3Function* i_function, ...) @cname("m3_CallV");
+extern fn M3Result M3Function.call_vl(M3Function* i_function, CVaList i_args) @cname("m3_CallVL");
+extern fn M3Result M3Function.call(M3Function* i_function, uint i_argc, void*[] i_argptrs) @cname("m3_Call");
+extern fn M3Result M3Function.call_argv(M3Function* i_function, uint i_argc, char*[] i_argv) @cname("m3_CallArgv");
 
-extern fn M3Result get_results_v(M3Function* i_function, ...) @cname("m3_GetResultsV");
-extern fn M3Result get_results_vl(M3Function* i_function, CVaList o_rets) @cname("m3_GetResultsVL");
-extern fn M3Result get_results(M3Function* i_function, uint i_retc, void*[] o_retptrs) @cname("m3_GetResults");
+extern fn M3Result M3Function.get_results_v(M3Function* i_function, ...) @cname("m3_GetResultsV");
+extern fn M3Result M3Function.get_results_vl(M3Function* i_function, CVaList o_rets) @cname("m3_GetResultsVL");
+extern fn M3Result M3Function.get_results(M3Function* i_function, uint i_retc, void*[] o_retptrs) @cname("m3_GetResults");
 
 
 extern fn void M3Runtime.get_error_info(M3Runtime* i_runtime, M3ErrorInfo* o_info) @cname("m3_GetErrorInfo");
 extern fn void M3Runtime.reset_error_info(M3Runtime* i_runtime) @cname("m3_ResetErrorInfo");
 
-extern fn char*      get_function_name(M3Function* i_function) @cname("m3_GetFunctionName");
-extern fn M3Module* get_function_module(M3Function* i_function) @cname("m3_GetFunctionModule");
+extern fn char* M3Function.get_function_name(M3Function* i_function) @cname("m3_GetFunctionName");
+extern fn M3Module* M3Function.get_function_module(M3Function* i_function) @cname("m3_GetFunctionModule");
 
 //-------------------------------------------------------------------------------------------------------------------------------
 //  debug info
@@ -309,4 +307,4 @@ extern fn void print_m3_info() @cname("m3_PrintM3Info");
 extern fn void print_profiler_info() @cname("m3_PrintProfilerInfo");
 
 // The runtime owns the backtrace, do not free the backtrace you obtain. Returns NULL if there's no backtrace.
-extern fn IM3BacktraceInfo M3Runtime.get_backtrace(M3Runtime* i_runtime) @cname("m3_GetBacktrace");
+extern fn M3BacktraceInfo* M3Runtime.get_backtrace(M3Runtime* i_runtime) @cname("m3_GetBacktrace");

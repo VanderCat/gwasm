@@ -11,7 +11,7 @@ fn int open(LuaState* state) @export("gmod13_open") {
 	// 	return -1;
 	// }
 	state.luabase.msg("may the wasm be in your game\n");
-	lua::create_runtime_metatable(state);
+	lua::create_metatables(state);
 	state.luabase.create_table();
 
     state.luabase.push_c_function(&lua::new_runtime);
