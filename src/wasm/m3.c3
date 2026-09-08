@@ -308,3 +308,38 @@ extern fn void print_profiler_info() @cname("m3_PrintProfilerInfo");
 
 // The runtime owns the backtrace, do not free the backtrace you obtain. Returns NULL if there's no backtrace.
 extern fn M3BacktraceInfo* M3Runtime.get_backtrace(M3Runtime* i_runtime) @cname("m3_GetBacktrace");
+
+//-------------------------------------------------------------------------------------------------------------------------------
+//  raw function definition helpers
+//-------------------------------------------------------------------------------------------------------------------------------
+
+macro @offset_to_ptr(offset) {
+    return (void*)((char*)_mem + (uint)(offset));
+}
+macro @ptr_to_offset(ptr){
+    return (uint)((char*)ptr - (char*)_mem);
+}
+
+macro @get_arg($Type, _sp, idx){
+    retur ($Type::size >= uint::size) ? (*(($Type *)(_sp[idx]))) : (($Type)(uptr)(*((uint *)(_sp[idx]))));
+}
+
+macro @get_arg_mem($Type, _sp, idx) {
+    return @offset_to_ptr(*((uint*)(_sp[idx])));
+}
+
+macro @is_null_ptr(addr, _mem) {
+    return ((void*)(addr) <= _mem);
+}
+
+// Whether [addr, addr+len) lies inside the memory _mem points at. Written as
+// two subtractions rather than base + size and addr + len, so that neither a
+// memory occupying the top of the address space nor a wild length can carry the
+// comparison past where it wraps. Its own block, so the locals go out of scope
+// with it.
+// macro @check_mem(addr, len, _mem){
+//     uptr _m3_base = (uptr)(_mem);
+//     uptr _m3_addr = (uptr)(void*)(addr);
+//     sz _m3_size = get_memory_size_at(_mem);
+//     return (@expect(!!(_m3_addr < _m3_base || (size_t)(_m3_addr - _m3_base) > _m3_size || (uint64_t)(len) > (uint64_t)(_m3_size - (size_t)(_m3_addr - _m3_base))), 0));
+// }
