@@ -96,3 +96,8 @@ constdef Types {
     PHYS_COLLIDE,
     SURFACE_INFO,
 }
+
+struct UserData {
+	void* data;
+	char type; // Change me to a uint32 one day
+}

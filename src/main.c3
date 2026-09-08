@@ -3,28 +3,29 @@ import gmod;
 import std::io;
 import wasm3;
 
-wasm3::IM3Environment wasm_env;
+wasm3::M3Environment* wasm_env;
 fn int open(LuaState* state) @export("gmod13_open") {
 	wasm_env = wasm3::new_environment();
 	// if (wasm_env == 0) {
-	// 	lua_interface::msg(state.luabase, "failed to load wasm3 :(\n");
+	// 	lstate.luabase.msg("failed to load wasm3 :(\n");
 	// 	return -1;
 	// }
-	lua_interface::msg(state.luabase, "may the wasm be in your game\n");
-	lua_base::create_table(state.luabase);
+	state.luabase.msg("may the wasm be in your game\n");
+	lua::create_runtime_metatable(state);
+	state.luabase.create_table();
 
-    lua_base::push_c_function(state.luabase, &lua::new_runtime);
-    lua_base::set_field(state.luabase, -2, "NewRuntime" );
+    state.luabase.push_c_function(&lua::new_runtime);
+    state.luabase.set_field(-2, "NewRuntime" );
 
-	lua_base::push_special(state.luabase, (int)gmod::Special.GLOBAL ); // Push the global table
-	lua_base::push(state.luabase, -2);
-	lua_base::set_field(state.luabase, -2, "wasm");
-    lua_base::pop(state.luabase, 2); // Pop the global table off the stack
+	state.luabase.push_special((int)gmod::Special.GLOBAL ); // Push the global table
+	state.luabase.push(-2);
+	state.luabase.set_field(-2, "wasm");
+    state.luabase.pop(2); // Pop the global table off the stack
 	return 0;
 }
 
 fn int close(LuaState state) @export("gmod13_close") {
-	wasm3::free_environment(wasm_env);
+	wasm_env.free();
 	return 0;
 }
 

@@ -1,3 +1,4 @@
+#define GMOD_ALLOW_DEPRECATED
 #include "garrysmod_common/include/GarrysMod/Lua/LuaInterface.h"
 #include "garrysmod_common/include/GarrysMod/Lua/LuaGameCallback.h"
 #include "garrysmod_common/include/GarrysMod/Lua/LuaObject.h"
@@ -163,6 +164,9 @@ EXTERN void gmod__lua_base__set_user_type(ILuaBase* self, int iStackPos, void* d
 })
 EXTERN void* gmod__lua_base__get_user_type(ILuaBase* self, int iStackPos, int iType) BODY({
     return self->GetUserType<void>(iStackPos, iType);
+})
+EXTERN void* gmod__lua_base__new_userdata(ILuaBase* self, unsigned int iSize) BODY({
+    return self->NewUserdata(iSize);
 })
 //BORKED:
 EXTERN void** gmod__lua_base__new_user_type(ILuaBase* self, int iType) BODY({
