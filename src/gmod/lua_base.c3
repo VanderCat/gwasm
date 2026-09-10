@@ -56,7 +56,7 @@ extern fn CFunc LuaBase.get_c_function(gmod::LuaBase* self, int iStackPos) @cnam
 //lua_pushnil
 extern fn void LuaBase.push_nil(gmod::LuaBase* self) @cname("gmod__lua_base__push_nil");
 // lua_pushlstring or lua_pushlstring if ilen == 0
-extern fn void LuaBase.push_string(gmod::LuaBase* self, char* val, CInt iLen) @cname("gmod__lua_base__push_string");
+extern fn void LuaBase.push_string(gmod::LuaBase* self, char* val, CInt iLen = 0) @cname("gmod__lua_base__push_string");
 // lua_pushnumber
 extern fn void LuaBase.push_number(gmod::LuaBase* self, double val) @cname("gmod__lua_base__push_number");
 // lua_pushboolean

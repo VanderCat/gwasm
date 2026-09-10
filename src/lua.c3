@@ -1,13 +1,22 @@
 module gmod_wasm::lua;
 
 import gmod;
+import libc;
 import wasm3;
+import std::core::string;
+
+struct M3RuntimeUserdata {
+	M3Runtime* runtime;
+	gmod::LuaState* state;
+	sz referenceCount;
+}
 
 macro luaL_getmetatable(gmod::LuaState* l, char* n) {
 	return l.luabase.get_field(gmod::Index.REGISTRY, (n));
 }
 
 macro @push_runtime(gmod::LuaState* l, M3Runtime* runtime) {
+	((M3RuntimeUserdata*)runtime.get_user_data()).referenceCount += 1;
 	l.luabase.push_user_type(runtime, runtime_type);
 	l.luabase.push_meta_table(runtime_type);
     l.luabase.set_meta_table(-2);
@@ -36,8 +45,11 @@ fn int new_runtime(gmod::LuaState* l) {
     l.luabase.check_number(1);
 	uint i_stackSizeInBytes = (uint)l.luabase.get_number(1);
     // void** ptr = (void**)l.luabase.new_userdata(uptr::size);
-	
-	M3Runtime* runtime = gmod_wasm::wasm_env.new_runtime(i_stackSizeInBytes, l); //TODO: userdata as handle?
+	M3RuntimeUserdata* userdata = mem::new(M3RuntimeUserdata);
+	userdata.state = l;
+	userdata.referenceCount = 1;
+	M3Runtime* runtime = gmod_wasm::wasm_env.new_runtime(i_stackSizeInBytes, l);
+	userdata.runtime = runtime;
 	@push_runtime(l, runtime);
 	return 1;
 }
@@ -50,7 +62,10 @@ fn int parse_module(gmod::LuaState* l) {
 	M3Module* module_;
 	CInt len;
 	char* buf = l.luabase.get_string(1, &len); //TODO: this pointer should not be garbage collected until module is freed, is it possible?
-	M3Result result = gmod_wasm::wasm_env.parse_module(&module_, buf, (uint)len);
+	String view = (String)buf[:len];
+	LibcAllocator libc;
+	String copy = view.copy(&libc);   // leaky!
+	M3Result result = gmod_wasm::wasm_env.parse_module(&module_, copy, (uint)copy.len);
 	if (result == null) {
 		@push_module(l, module_);
 		return 1;
@@ -91,7 +106,10 @@ macro @get_global(gmod::LuaState* l, int stackPos) {
 fn int free_runtime(gmod::LuaState* l) {
 	@is_runtime(l, 1);
 	M3Runtime* runtime = @get_runtime(l, 1);
-	runtime.free_runtime();
+	((M3RuntimeUserdata*)runtime.get_user_data()).referenceCount -= 1;
+	if (((M3RuntimeUserdata*)runtime.get_user_data()).referenceCount == 0) {
+		runtime.free_runtime();
+	}
 	return 0;
 }
 
@@ -120,13 +138,13 @@ fn int get_gas_used(gmod::LuaState* l) {
 	@is_runtime(l, 1);
 	M3Runtime* runtime = @get_runtime(l, 1);
 	l.luabase.push_number(runtime.get_gas_used());
-	return 0;
+	return 1;
 }
 fn int load_module(gmod::LuaState* l) {
 	@is_runtime(l, 1);
 	@is_module(l, 2);
 	M3Runtime* runtime = @get_runtime(l, 1);
-	M3Module* mod = @get_module(l, 1);
+	M3Module* mod = @get_module(l, 2);
 	M3Result res = runtime.load_module(mod);
 	if (res != null) {
 		l.luabase.throw_error(res);
@@ -153,7 +171,11 @@ fn int find_module(gmod::LuaState* l) {
 	M3Runtime* runtime = @get_runtime(l, 1);
 	char* str = l.luabase.get_string(2, null);
 	M3Module* mod = runtime.find_module(str);
-	@push_module(l, mod);
+	if (mod != null) {
+		@push_module(l, mod);
+	} else {
+		l.luabase.push_nil();
+	}
 	return 1;
 }
 fn int get_error_info(gmod::LuaState* l) {
@@ -216,7 +238,6 @@ fn void create_runtime_metatable(gmod::LuaState* l) {
 	@add_function(l, "LoadModule", &load_module);
 	@add_function(l, "FindModule", &find_module);
 	@add_function(l, "FindFunction", &find_function);
-	@add_function(l, "SetGasLimit", &set_gas_limit);
 	@add_function(l, "GetErrorInfo", &get_error_info);
 	@add_function(l, "ResetErrorInfo", &reset_error_info);
 	@add_function(l, "GetBacktrace", &get_backtrace);
@@ -370,9 +391,14 @@ fn int get_runtime(gmod::LuaState* l) {
 	M3Module* mod = @get_module(l, 1);
 	M3Runtime* runtime = mod.get_runtime();
 	@push_runtime(l, runtime);
-	return 0;
+	return 1;
 }
 fn int find_function_in(gmod::LuaState* l) {
+	@is_module(l, 1);
+	l.luabase.throw_error("not implemented");
+	return 0;
+}
+fn int find_global(gmod::LuaState* l) {
 	@is_module(l, 1);
 	l.luabase.throw_error("not implemented");
 	return 0;
@@ -393,13 +419,12 @@ fn int get_table_function(gmod::LuaState* l) {
 int module_type = 0;
 fn void create_module_metatable(gmod::LuaState* l) {
 	l.luabase.msg("[WASM] Creating metatable for M3Module\n");
-	global_type = l.luabase.create_meta_table("M3Module*");
+	module_type = l.luabase.create_meta_table("M3Module*");
 	@add_function(l, "__gc", &module_free); // FIXME: Only a module that was never handed to LoadModule needs to be freed.
 	@add_function(l, "GetMemory", &get_memory);
 	@add_function(l, "SetMemorySize", &set_memory_size);
 	@add_function(l, "FindExportedMemory", &find_exported_memory);
 	@add_function(l, "BindImportMemory", &bind_import_memory);
-	@add_function(l, "FindExportedMemory", &find_exported_memory);
 	@add_function(l, "RunStart", &run_start);
 	@add_function(l, "Compile", &compile);
 	@add_function(l, "LinkFunction", &link_raw_function);
@@ -408,29 +433,70 @@ fn void create_module_metatable(gmod::LuaState* l) {
 	@add_function(l, "SetName", &set_name);
 	@add_function(l, "GetRuntime", &get_runtime);
 	@add_function(l, "FindFunction", &find_function_in);
+	@add_function(l, "FindGlobal", &find_global);
 	@add_function(l, "GetTableFunction", &get_table_function);
 	l.luabase.set_field(-1, "__index");
 	l.luabase.msg("[WASM] Metatable for M3Module successfully created\n");
 }
 fn int get_arg_count(gmod::LuaState* l) {
 	@is_function(l, 1);
-	l.luabase.throw_error("not implemented");
-	return 0;
+	M3Function* func = @get_function(l, 1);
+	l.luabase.push_number(func.get_arg_count());
+	return 1;
 }
 fn int get_ret_count(gmod::LuaState* l) {
 	@is_function(l, 1);
-	l.luabase.throw_error("not implemented");
-	return 0;
+	M3Function* func = @get_function(l, 1);
+	l.luabase.push_number(func.get_ret_count());
+	return 1;
 }
 fn int get_arg_type(gmod::LuaState* l) {
 	@is_function(l, 1);
-	l.luabase.throw_error("not implemented");
-	return 0;
+	M3Function* func = @get_function(l, 1);
+	uint number = (uint)l.luabase.check_number(2);
+	M3ValueType res = func.get_arg_type(number);
+	l.luabase.push_string(@get_enum_name(res), 0);
+	return 1;
+}
+macro ZString @get_enum_name(M3ValueType t) {
+	switch (t) {
+		case M3ValueType.NONE:
+			return "none";
+			break;
+		case M3ValueType.I64:
+			return "i64";
+			break;
+		case M3ValueType.I32:
+			return "i32";
+			break;
+		case M3ValueType.F32:
+			return "f32";
+			break;
+		case M3ValueType.F64:
+			return "f64";
+			break;
+		case M3ValueType.V128:
+			return "v128";
+			break;
+		case M3ValueType.FUNCREF:
+			return "funcref";
+			break;
+		case M3ValueType.EXNREF:
+			return "exnref";
+			break;
+		case M3ValueType.EXTERNREF:
+			return "externref";
+			break;
+	}
+	return null;
 }
 fn int get_ret_type(gmod::LuaState* l) {
 	@is_function(l, 1);
-	l.luabase.throw_error("not implemented");
-	return 0;
+	M3Function* func = @get_function(l, 1);
+	uint number = (uint)l.luabase.check_number(2);
+	M3ValueType res = func.get_ret_type(number);
+	l.luabase.push_string(@get_enum_name(res), 0);
+	return 1;
 }
 fn int call(gmod::LuaState* l) {
 	@is_function(l, 1);
@@ -441,18 +507,21 @@ fn int call(gmod::LuaState* l) {
 }
 fn int get_function_name(gmod::LuaState* l) {
 	@is_function(l, 1);
-	l.luabase.throw_error("not implemented");
-	return 0;
+	M3Function* func = @get_function(l, 1);
+	l.luabase.push_string(func.get_name());
+	return 1;
 }
 fn int get_module(gmod::LuaState* l) {
 	@is_function(l, 1);
-	l.luabase.throw_error("not implemented");
-	return 0;
+	M3Function* func = @get_function(l, 1);
+	M3Module* mod = func.get_module();
+	@push_module(l, mod);
+	return 1;
 }
 int function_type = 0;
 fn void create_function_metatable(gmod::LuaState* l) {
 	l.luabase.msg("[WASM] Creating metatable for M3Function\n");
-	global_type = l.luabase.create_meta_table("M3Function*");
+	function_type = l.luabase.create_meta_table("M3Function*");
 	@add_function(l, "GetArgCount", &get_arg_count);
 	@add_function(l, "GetRetCount", &get_ret_count);
 	@add_function(l, "GetArgType", &get_arg_type);

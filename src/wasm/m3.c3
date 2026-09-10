@@ -295,8 +295,8 @@ extern fn M3Result M3Function.get_results(M3Function* i_function, uint i_retc, v
 extern fn void M3Runtime.get_error_info(M3Runtime* i_runtime, M3ErrorInfo* o_info) @cname("m3_GetErrorInfo");
 extern fn void M3Runtime.reset_error_info(M3Runtime* i_runtime) @cname("m3_ResetErrorInfo");
 
-extern fn char* M3Function.get_function_name(M3Function* i_function) @cname("m3_GetFunctionName");
-extern fn M3Module* M3Function.get_function_module(M3Function* i_function) @cname("m3_GetFunctionModule");
+extern fn char* M3Function.get_name(M3Function* i_function) @cname("m3_GetFunctionName");
+extern fn M3Module* M3Function.get_module(M3Function* i_function) @cname("m3_GetFunctionModule");
 
 //-------------------------------------------------------------------------------------------------------------------------------
 //  debug info

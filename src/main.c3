@@ -16,6 +16,10 @@ fn int open(LuaState* state) @export("gmod13_open") {
 
     state.luabase.push_c_function(&lua::new_runtime);
     state.luabase.set_field(-2, "NewRuntime" );
+	state.luabase.push_c_function(&lua::yield);
+    state.luabase.set_field(-2, "Yield" );
+	state.luabase.push_c_function(&lua::parse_module);
+    state.luabase.set_field(-2, "ParseModule" );
 
 	state.luabase.push_special((int)gmod::Special.GLOBAL ); // Push the global table
 	state.luabase.push(-2);
