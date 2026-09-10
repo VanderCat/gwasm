@@ -44,7 +44,7 @@ extern fn void LuaBase.raw_get(gmod::LuaBase* self, int iStackPos) @cname("gmod_
 // lua_rawset
 extern fn void LuaBase.raw_set(gmod::LuaBase* self, int iStackPos) @cname("gmod__lua_base__raw_set");
 // lua_tolstring
-extern fn char* LuaBase.get_string(gmod::LuaBase* self, int iStackPos, CInt* iOutLen) @cname("gmod__lua_base__get_string");
+extern fn char* LuaBase.get_string(gmod::LuaBase* self, int iStackPos, CInt* iOutLen = null) @cname("gmod__lua_base__get_string");
 // lua_tonumber
 extern fn double LuaBase.get_number(gmod::LuaBase* self, int iStackPos) @cname("gmod__lua_base__get_number");
 // lua_toboolean

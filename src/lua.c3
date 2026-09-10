@@ -11,6 +11,10 @@ struct M3RuntimeUserdata {
 	sz referenceCount;
 }
 
+fn bool M3RuntimeUserdata.owns(M3RuntimeUserdata*, M3Module* mod) {
+	return true; //TODO: STUB
+}
+
 macro luaL_getmetatable(gmod::LuaState* l, char* n) {
 	return l.luabase.get_field(gmod::Index.REGISTRY, (n));
 }
@@ -246,26 +250,40 @@ fn void create_runtime_metatable(gmod::LuaState* l) {
 }
 fn int module_free(gmod::LuaState* l) {
 	@is_module(l, 1);
-	@get_module(l, 1).free();
+	M3Module* mod = @get_module(l, 1);
+	M3RuntimeUserdata* ud = (M3RuntimeUserdata*)mod.get_runtime().get_user_data();
+	if (!ud.owns(mod)) {
+		mod.free(); // this could be garbage collected safely 
+	}
 	return 0;
 }
 fn int get_memory(gmod::LuaState* l) {
 	@is_module(l, 1);
+	M3Module* mod = @get_module(l, 1);
+	sz size;
+	char* ptr = mod.get_memory(&size, 0);
+	
 	l.luabase.throw_error("not implemented");
 	return 0;
 }
-fn int set_memory_size(gmod::LuaState* l) {
+fn int get_memory_size(gmod::LuaState* l) {
 	@is_module(l, 1);
-	l.luabase.throw_error("not implemented");
-	return 0;
+	M3Module* mod = @get_module(l, 1);
+	sz size;
+	mod.get_memory_size((uint)l.luabase.check_number(2));
+	l.luabase.push_number((double)size);
+	return 1;
 }
+
 fn int find_exported_memory(gmod::LuaState* l) {
 	@is_module(l, 1);
+	M3Module* mod = @get_module(l, 1);
 	l.luabase.throw_error("not implemented");
 	return 0;
 }
 fn int bind_import_memory(gmod::LuaState* l) {
 	@is_module(l, 1);
+	M3Module* mod = @get_module(l, 1);
 	l.luabase.throw_error("not implemented");
 	return 0;
 }
@@ -395,13 +413,24 @@ fn int get_runtime(gmod::LuaState* l) {
 }
 fn int find_function_in(gmod::LuaState* l) {
 	@is_module(l, 1);
-	l.luabase.throw_error("not implemented");
+	@is_string(l, 2);
+	M3Module* mod = @get_module(l, 1);
+	M3Function* func;
+	M3Result res = wasm3::find_function_in(&func, mod, l.luabase.get_string(2));
+	if (res != null) {
+		@push_error(l, res);
+		return 2;
+	}
+	@push_function(l, func);
 	return 0;
 }
 fn int find_global(gmod::LuaState* l) {
 	@is_module(l, 1);
-	l.luabase.throw_error("not implemented");
-	return 0;
+	@is_string(l, 2);
+	M3Module* mod = @get_module(l, 1);
+	M3Global* glob = mod.find_global(l.luabase.get_string(2));
+	@push_global(l, glob);
+	return 1;
 }
 fn int get_table_function(gmod::LuaState* l) {
 	@is_module(l, 1);
@@ -422,7 +451,7 @@ fn void create_module_metatable(gmod::LuaState* l) {
 	module_type = l.luabase.create_meta_table("M3Module*");
 	@add_function(l, "__gc", &module_free); // FIXME: Only a module that was never handed to LoadModule needs to be freed.
 	@add_function(l, "GetMemory", &get_memory);
-	@add_function(l, "SetMemorySize", &set_memory_size);
+	@add_function(l, "GetMemorySize", &get_memory_size);
 	@add_function(l, "FindExportedMemory", &find_exported_memory);
 	@add_function(l, "BindImportMemory", &bind_import_memory);
 	@add_function(l, "RunStart", &run_start);

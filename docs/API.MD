@@ -75,14 +75,12 @@ TODO: NOT IMPLEMENTED
 ```lua
 M3Module:GetMemory()
 ```
-TODO: NOT IMPLEMENTED
+TODO: NOT IMPLEMENTED, should we split to `GetMemory(type: string, uint index): any?` and `SetMemory(type: string, uint index, value): any?` for sandboxing reasons and due to no pointer support in lua?
 
-A memory belongs to the module that declares it, so this take the module rather than the runtime - a runtime can hold several modules, each with its own memories. Returns `nil` when the module has no memory at that index; o_memorySizeInBytes is set either way.
-
+A memory belongs to the module that declares it, so this take the module rather than the runtime - a runtime can hold several modules, each with its own memories. Returns `nil` when the module has no memory at that index.
 ```lua
-M3Module:SetMemorySize()
+M3Module:GetMemorySize(index: number): number
 ```
-TODO: NOT IMPLEMENTED
 
 ```lua
 M3Module:FindExportedMemory(name: string): uint
@@ -123,11 +121,9 @@ M3Module:GetRuntime(): M3Runtime
 ```lua
 M3Module:FindGlobal(name: string): M3Global
 ```
-TODO: NOT IMPLEMENTED
 ```lua
-M3Module:FindFunction(name: string): M3Function
+M3Module:FindFunction(name: string): M3Function? error?
 ```
-TODO: NOT IMPLEMENTED
 Searches just the one, which is what naming a module's export means.
 ```lua
 M3Module:GetTableFunction(index: number): M3Function?, error?
