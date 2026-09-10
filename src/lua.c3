@@ -228,6 +228,7 @@ fn void create_metatables(gmod::LuaState* l) {
 	create_module_metatable(l);
 	create_function_metatable(l);
 	create_global_metatable(l);
+	create_memory_view_metatable(l);
 }
 int runtime_type = 0;
 fn void create_runtime_metatable(gmod::LuaState* l) {
@@ -259,12 +260,12 @@ fn int module_free(gmod::LuaState* l) {
 }
 fn int get_memory(gmod::LuaState* l) {
 	@is_module(l, 1);
-	M3Module* mod = @get_module(l, 1);
-	sz size;
-	char* ptr = mod.get_memory(&size, 0);
-	
-	l.luabase.throw_error("not implemented");
-	return 0;
+	l.luabase.create_table();
+	l.luabase.push(1);
+	l.luabase.set_field(-2, "__module");
+	l.luabase.push_meta_table(memview_type);
+	l.luabase.set_meta_table(-2);
+	return 1;
 }
 fn int get_memory_size(gmod::LuaState* l) {
 	@is_module(l, 1);
@@ -616,4 +617,130 @@ fn void create_global_metatable(gmod::LuaState* l) {
 	@add_function(l, "GetType", &get_type);
 	l.luabase.set_field(-1, "__index");
 	l.luabase.msg("[WASM] Metatable for M3Global successfully created\n");
+}
+
+struct LuaM3MemView {
+	M3Module* mod;
+}
+
+fn char[] LuaM3MemView.get_memory(LuaM3MemView self) {
+	sz memorySize;
+	char* ptr = self.mod.get_memory(&memorySize, 0); //always 0 in wasm3, may change in future 
+	return ptr[:memorySize];
+}
+fn void LuaM3MemView.write(LuaM3MemView self, uint offset, void* ptr, uint len) { //max 4GB in wasm
+	char[] mem = self.get_memory();
+	char* mem_ptr = mem;
+	mem::copy(mem_ptr+offset, ptr, len);
+}
+fn char[] LuaM3MemView.read(LuaM3MemView self, uint offset, uint len) {
+	char[] mem = self.get_memory();
+	return mem[offset:len];
+}
+fn String LuaM3MemView.read_string(LuaM3MemView self, uint offset) {
+	ZString mem = (ZString)(char*)self.get_memory();
+	return mem.str_view();
+}
+fn void write_value_to_memview(LuaM3MemView self, uint offset, Type value) <Type> {
+	char* mem = (char*)self.get_memory();
+	(*((Type*)(mem+offset))) = value;
+}
+fn Type read_value_from_memview(LuaM3MemView self, uint offset) <Type> {
+	char* mem = (char*)self.get_memory();
+	return *((Type*)mem);
+}
+
+macro void @push_memview(gmod::LuaState* l, LuaM3MemView memview) {
+	l.luabase.create_table();
+	l.luabase.push_string("__module");
+	@push_module(l, memview.mod);
+	l.luabase.push_meta_table(function_type);
+    l.luabase.set_meta_table(-2);
+}
+
+macro LuaM3MemView @get_memview(gmod::LuaState* l, int stackPos) {
+	l.luabase.get_field(1, "__module");
+	return (LuaM3MemView){@get_module(l, -1)};
+}
+macro void @is_memview(gmod::LuaState* l, int stackPos) {
+	l.luabase.get_field(1, "__module");
+	l.luabase.check_type(-1, memview_type);
+	l.luabase.pop();
+}
+
+fn int lua_memview_write(gmod::LuaState* l) <Type> {
+	@is_memview(l, 1);
+	LuaM3MemView memview = @get_memview(l, 1);
+	uint offset = (uint)l.luabase.check_number(2);
+	Type value = (Type)l.luabase.check_number(3);
+	write_value_to_memview{Type}(memview, offset, value);
+	return 0;
+}
+fn int lua_memview_read(gmod::LuaState* l) <Type> {
+	@is_memview(l, 1);
+	LuaM3MemView memview = @get_memview(l, 1);
+	uint offset = (uint)l.luabase.check_number(2);
+	l.luabase.push_number((Type)read_value_from_memview{Type}(memview, offset));
+	return 0;
+}
+fn int lua_memview_read_string(gmod::LuaState* l) <Type> {
+	@is_memview(l, 1);
+	LuaM3MemView memview = @get_memview(l, 1);
+	uint offset = (uint)l.luabase.check_number(2);
+	if (l.luabase.is_type(3, (int)gmod::Types.NUMBER)) {
+		uint len = (uint)l.luabase.check_number(3);
+		char[] mem = memview.read(offset, len);
+		l.luabase.push_string(mem, mem.len);
+	} else {
+		char* str = ((char*)memview.get_memory())+offset;
+		l.luabase.push_string(str);
+	}
+	return 1;
+}
+fn int lua_memview_write_string(gmod::LuaState* l) {
+	@is_memview(l, 1);
+	@is_string(l, 3);
+	LuaM3MemView memview = @get_memview(l, 1);
+	uint offset = (uint)l.luabase.check_number(2);
+	CInt len;
+	char* value = (char*)l.luabase.get_string(3, &len);
+	bool shouldPrintNull = false;
+	if (l.luabase.is_type(4, (int)gmod::Types.BOOL)) {
+		shouldPrintNull = l.luabase.get_bool(4);
+	}
+	if (shouldPrintNull) {
+		len+=1; // lua guarntees last character after len will be \0
+	}
+	memview.write(offset, value, (uint)len);
+	return 0;
+}
+int memview_type = 0;
+
+fn void create_memory_view_metatable(gmod::LuaState* l) {
+	l.luabase.msg("[WASM] Creating metatable for LuaM3MemView\n");
+	global_type = l.luabase.create_meta_table("LuaM3MemView");
+	@add_function(l, "WriteI8", &lua_memview_write{ichar});
+	@add_function(l, "WriteI16", &lua_memview_write{short}); 
+	@add_function(l, "WriteI32", &lua_memview_write{int});
+	@add_function(l, "WriteI64", &lua_memview_write{long}); // precision loss! should we advocate not using this function?
+	@add_function(l, "WriteU8", &lua_memview_write{char});
+	@add_function(l, "WriteU16", &lua_memview_write{ushort});
+	@add_function(l, "WriteU32", &lua_memview_write{uint});
+	@add_function(l, "WriteU64", &lua_memview_write{ulong}); // see WriteI64
+	@add_function(l, "WriteF32", &lua_memview_write{float});
+	@add_function(l, "WriteF64", &lua_memview_write{double});
+	@add_function(l, "WriteString", &lua_memview_write{double});
+	@add_function(l, "ReadI8", &lua_memview_write{ichar});
+	@add_function(l, "ReadI16", &lua_memview_write{short}); 
+	@add_function(l, "ReadI32", &lua_memview_write{int});
+	@add_function(l, "ReadI64", &lua_memview_write{long}); // precision loss! should we advocate not using this function?
+	@add_function(l, "ReadU8", &lua_memview_write{char});
+	@add_function(l, "ReadU16", &lua_memview_write{ushort});
+	@add_function(l, "ReadU32", &lua_memview_write{uint});
+	@add_function(l, "ReadU64", &lua_memview_write{ulong}); // see WriteI64
+	@add_function(l, "ReadF32", &lua_memview_write{float});
+	@add_function(l, "ReadF64", &lua_memview_write{double});
+	@add_function(l, "ReadString", &lua_memview_write{double});
+	l.luabase.set_field(-1, "__index");
+	l.luabase.msg("[WASM] Metatable for LuaM3MemView successfully created\n");
 }

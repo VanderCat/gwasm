@@ -4,7 +4,7 @@ extern fn int LuaBase.top(gmod::LuaBase* self) @cname("gmod__lua_base__top");
 // lua_pushvalue
 extern fn void LuaBase.push(gmod::LuaBase* self, int iStackPos) @cname("gmod__lua_base__push");
 // lua_pop
-extern fn void LuaBase.pop(gmod::LuaBase* self, int iAmt) @cname("gmod__lua_base__pop");
+extern fn void LuaBase.pop(gmod::LuaBase* self, int iAmt = 1) @cname("gmod__lua_base__pop");
 // lua_gettable
 extern fn void LuaBase.get_table(gmod::LuaBase* self, int iStackPos) @cname("gmod__lua_base__get_table");
 // lua_getfield

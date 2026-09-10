@@ -73,11 +73,9 @@ TODO: NOT IMPLEMENTED
 
 # M3Module
 ```lua
-M3Module:GetMemory()
+M3Module:GetMemory(): LuaM3MemView
 ```
-TODO: NOT IMPLEMENTED, should we split to `GetMemory(type: string, uint index): any?` and `SetMemory(type: string, uint index, value): any?` for sandboxing reasons and due to no pointer support in lua?
-
-A memory belongs to the module that declares it, so this take the module rather than the runtime - a runtime can hold several modules, each with its own memories. Returns `nil` when the module has no memory at that index.
+A memory belongs to the module that declares it, so this take the module rather than the runtime - a runtime can hold several modules, each with its own memories. 
 ```lua
 M3Module:GetMemorySize(index: number): number
 ```
@@ -170,3 +168,75 @@ TODO: NOT IMPLEMENTED
 M3Global:GetType()
 ```
 TODO: NOT IMPLEMENTED
+
+# LuaM3MemView
+```lua
+LuaM3MemView:WriteI8(offset: number, value: number)
+```
+```lua
+LuaM3MemView:WriteI16(offset: number, value: number)
+```
+```lua 
+LuaM3MemView:WriteI32(offset: number, value: number)
+```
+```lua
+LuaM3MemView:WriteI64(offset: number, value: number)
+```
+precision loss! note that lua number have atmost 53 precision
+```lua 
+LuaM3MemView:WriteU8(offset: number, value: number)
+```
+```lua
+LuaM3MemView:WriteU16(offset: number, value: number)
+```
+```lua
+LuaM3MemView:WriteU32(offset: number, value: number)
+```
+```lua
+LuaM3MemView:WriteU64(offset: number, value: number)
+```
+see WriteI64
+```lua 
+LuaM3MemView:WriteF32(offset: number, value: number)
+```
+```lua
+LuaM3MemView:WriteF64(offset: number, value: number)
+```
+```lua
+LuaM3MemView:WriteString(offset: number, value: string, writeZero: bool = false)
+```
+```lua
+LuaM3MemView:ReadI8(offset: number): number
+```
+```lua
+LuaM3MemView:ReadI16(offset: number): number
+```
+```lua 
+LuaM3MemView:ReadI32(offset: number): number
+```
+```lua
+LuaM3MemView:ReadI64(offset: number): number
+```
+see WriteI64
+```lua
+LuaM3MemView:ReadU8(offset: number): number
+```
+```lua
+LuaM3MemView:ReadU16(offset: number): number
+```
+```lua
+LuaM3MemView:ReadU32(offset: number): number
+```
+```lua
+LuaM3MemView:ReadU64(offset: number): number
+```
+see WriteI64
+```lua 
+LuaM3MemView:ReadF32(offset: number): number
+```
+```lua
+LuaM3MemView:ReadF64(offset: number): number
+```
+```lua
+LuaM3MemView:ReadString(offset: number, len: number?): string
+```
