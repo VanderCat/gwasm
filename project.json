@@ -28,7 +28,7 @@
   // You can use 'c3c --list-targets' to list all valid targets.
   // "target": "windows-x64",
   // Targets.
-  "link-args": ["build/bridge.o", "wasm3/zig-out/lib/libm3.a", "/home/vandercat/.local/share/Steam/steamapps/common/GarrysMod/bin/linux64/lua_shared.so"],
+  "link-args": ["build/bridge.o", "wasm3/zig-out/lib/libm3.a"],
   "targets": {
     // "gmsv_wasm_win32": {
     //   // Executable or library.
