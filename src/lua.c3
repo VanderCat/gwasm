@@ -10,6 +10,10 @@ struct M3RuntimeUserdata {
 	gmod::LuaState* state;
 	sz referenceCount;
 }
+struct M3FunctionUserdata {
+	M3RuntimeUserdata* runtimeUserdata;
+	int functionReference;
+}
 
 fn bool M3RuntimeUserdata.owns(M3RuntimeUserdata*, M3Module* mod) {
 	return true; //TODO: STUB
@@ -20,22 +24,46 @@ macro luaL_getmetatable(gmod::LuaState* l, char* n) {
 }
 
 macro @push_runtime(gmod::LuaState* l, M3Runtime* runtime) {
-	((M3RuntimeUserdata*)runtime.get_user_data()).referenceCount += 1;
+	if (runtime == null) {
+		gmod_wasm::@log(l, "null pointer pushed here");
+		l.luabase.throw_error("attempt to push null pointer");
+	}
+	gmod_wasm::@log(l, "pushing runtime %x", runtime);
+	M3RuntimeUserdata* udata = (M3RuntimeUserdata*)runtime.get_user_data();
+	gmod_wasm::@log(l, "udata pointer is %x", udata);
+	if (udata == null) {
+		gmod_wasm::@log(l, "something went seriously wrong, the userdata pointer is null, expect a crash soon!");
+	} else {
+		udata.referenceCount += 1;
+	}
+	//((M3RuntimeUserdata*)runtime.get_user_data()).referenceCount += 1;
 	l.luabase.push_user_type(runtime, runtime_type);
 	l.luabase.push_meta_table(runtime_type);
     l.luabase.set_meta_table(-2);
 }
 macro @push_module(gmod::LuaState* l, M3Module* module_) {
+	if (module_ == null) {
+		gmod_wasm::@log(l, "null pointer pushed here");
+		l.luabase.throw_error("attempt to push null pointer");
+	}
 	l.luabase.push_user_type(module_, module_type);
 	l.luabase.push_meta_table(module_type);
     l.luabase.set_meta_table(-2);
 }
 macro @push_function(gmod::LuaState* l, M3Function* func) {
+	if (func == null) {
+		gmod_wasm::@log(l, "null pointer pushed here");
+		l.luabase.throw_error("attempt to push null pointer");
+	}
 	l.luabase.push_user_type(func, function_type);
 	l.luabase.push_meta_table(function_type);
     l.luabase.set_meta_table(-2);
 }
 macro @push_global(gmod::LuaState* l, M3Global* global) {
+	if (global == null) {
+		gmod_wasm::@log(l, "null pointer pushed here");
+		l.luabase.throw_error("attempt to push null pointer");
+	}
 	l.luabase.push_user_type(global, global_type);
 	l.luabase.push_meta_table(global_type);
     l.luabase.set_meta_table(-2);
@@ -48,13 +76,20 @@ macro @push_error(gmod::LuaState* l, M3Result error) {
 fn int new_runtime(gmod::LuaState* l) {
     l.luabase.check_number(1);
 	uint i_stackSizeInBytes = (uint)l.luabase.get_number(1);
+	gmod_wasm::@log(l, "called with %u", i_stackSizeInBytes);
+	defer gmod_wasm::@log(l, "exiting");
     // void** ptr = (void**)l.luabase.new_userdata(uptr::size);
 	M3RuntimeUserdata* userdata = mem::new(M3RuntimeUserdata);
 	userdata.state = l;
 	userdata.referenceCount = 1;
-	M3Runtime* runtime = gmod_wasm::wasm_env.new_runtime(i_stackSizeInBytes, l);
+	gmod_wasm::@log(l, "created udata");
+	gmod_wasm::@log(l, "udata pointer is %x", userdata);
+	M3Runtime* runtime = gmod_wasm::wasm_env.new_runtime(i_stackSizeInBytes, userdata);
 	userdata.runtime = runtime;
+	gmod_wasm::@log(l, "sanity check: %x", runtime.get_user_data());
+	gmod_wasm::@log(l, "created runtime\n");
 	@push_runtime(l, runtime);
+	l.luabase.msg("uhhh...\n");
 	return 1;
 }
 fn int yield(gmod::LuaState* l) {
@@ -110,6 +145,7 @@ macro @get_global(gmod::LuaState* l, int stackPos) {
 fn int free_runtime(gmod::LuaState* l) {
 	@is_runtime(l, 1);
 	M3Runtime* runtime = @get_runtime(l, 1);
+	gmod_wasm::@log(l, "freeing the runtime");
 	((M3RuntimeUserdata*)runtime.get_user_data()).referenceCount -= 1;
 	if (((M3RuntimeUserdata*)runtime.get_user_data()).referenceCount == 0) {
 		runtime.free_runtime();
@@ -187,21 +223,45 @@ fn int get_error_info(gmod::LuaState* l) {
 	M3Runtime* runtime = @get_runtime(l, 1);
 	M3ErrorInfo info;
 	runtime.get_error_info(&info);
+	if (info.result == null && 
+		info.file == null && 
+		info.message == null && 
+		info.line == 0 && 
+		info.module_ == null && 
+		info.runtime == null &&
+		info.function == null
+		) {
+			return 0; // no error
+		}
 	l.luabase.create_table();
-	l.luabase.push_string(info.result, 0);
-	l.luabase.set_field(-2, "result");
-	l.luabase.push_string(info.file, 0);
-	l.luabase.set_field(-2, "file");
-	l.luabase.push_string(info.message, 0);
-	l.luabase.set_field(-2, "message");
-	l.luabase.push_number(info.line);
-	l.luabase.set_field(-2, "line");
-	@push_module(l, info.module_);
-	l.luabase.set_field(-2, "module");
-	@push_runtime(l, info.runtime);
-	l.luabase.set_field(-2, "runtime");
-	@push_function(l, info.function);
-	l.luabase.set_field(-2, "function");
+	if (info.result != null) {
+		l.luabase.push_string(info.result);
+		l.luabase.set_field(-2, "result");
+	}
+	if (info.file != null) {
+		l.luabase.push_string(info.file);
+		l.luabase.set_field(-2, "file");
+	}
+	if (info.message != null) {
+		l.luabase.push_string(info.message);
+		l.luabase.set_field(-2, "message");
+	}
+	if (info.line != 0) {
+		l.luabase.push_number(info.line);
+		l.luabase.set_field(-2, "line");
+	}
+	if (info.module_ != null) {
+		@push_module(l, info.module_);
+		l.luabase.set_field(-2, "module");
+	}
+	if (info.runtime != null) {
+		@push_runtime(l, info.runtime);
+		l.luabase.set_field(-2, "runtime");
+	}
+	if (info.function != null) {
+		@push_function(l, info.function);
+		l.luabase.set_field(-2, "function");
+	}
 	return 1;
 }
 fn int reset_error_info(gmod::LuaState* l) {
@@ -309,54 +369,53 @@ fn int compile(gmod::LuaState* l) {
 // Arguments and return values are passed in and out through the stack pointer _sp.
 // Placeholder return value slots are first and arguments after. So, the first argument is at _sp [numReturns]
 // Return values should be written into _sp [0] to _sp [num_returns - 1]
+// Example stack int calc(1, 2) -> [return, 1, 2] 
 fn void* rawfunc(M3Runtime* runtime, M3ImportContext* _ctx, ulong* _sp, void* _mem) {
-	gmod::LuaState* l = runtime.get_user_data();
+	M3FunctionUserdata* udata = _ctx.userdata; //does it change the userdata outside of function calling scope?
+	gmod::LuaState* l = udata.runtimeUserdata.state;
 	uint iArgs = _ctx.function.get_arg_count();
 	uint iRets = _ctx.function.get_ret_count();
-	for (uint i = 1; i < iArgs; i += 1) {
+	for (uint i = 0; i < iArgs; i += 1) {
 		void* arg = (void*)_sp[iRets+i];
 		M3ValueType type = _ctx.function.get_arg_type(i);
 		switch (type) {
 			case I32:
 				l.luabase.push_number(*(int*)arg);
-				break;
 			case I64:
 				l.luabase.push_number(*(long*)arg);
-				break;
 			case F32:
 				l.luabase.push_number(*(float*)arg);
-				break;
 			case F64:
 				l.luabase.push_number(*(double*)arg);
-				break;
 			case FUNCREF:
-				@push_function(l, (M3Function*)arg);
-				break;
+				M3Function* ptr = (M3Function*)arg;
+				if (arg == null) {
+					l.luabase.push_nil();
+				} else {
+					@push_function(l, (M3Function*)arg);
+				}
 			default:
 				l.luabase.msg("unknown arg! got TODO");
-				//l.luabase.msg(type.description());
+				//l.luabase.msg(type::);
 				l.luabase.msg("\n");
 				break;
 		}
 	}
-	l.luabase.reference_push((int)(iptr)_ctx.userdata);
-	l.luabase.call((int)iArgs, (int)iRets);
-	for (uint i = 1; i < iRets; i += 1) {
-		void* arg = (void*)_sp[iRets+i];
+	l.luabase.reference_push(udata.functionReference);
+	l.luabase.call((int)iArgs, (int)iRets); //TODO: pcall
+	for (uint i = 0; i < iRets; i += 1) {
+		void* arg = (void*)_sp[i];
 		M3ValueType type = _ctx.function.get_ret_type(i);
+		int luaStackPos = ((int)i)-((int)iRets);
 		switch (type) {
 			case I32:
-				(*(int*)arg) = (int)l.luabase.get_number((int)i);
-				break;
+				(*(int*)arg) = (int)l.luabase.get_number(luaStackPos);
 			case I64:
-				(*(long*)arg) = (long)l.luabase.get_number((int)i);
-				break;
+				(*(long*)arg) = (long)l.luabase.get_number(luaStackPos);
 			case F32:
-				(*(float*)arg) = (float)l.luabase.get_number((int)i);
-				break;
+				(*(float*)arg) = (float)l.luabase.get_number(luaStackPos);
 			case F64:
-				(*(double*)arg) = l.luabase.get_number((int)i);
-				break;
+				(*(double*)arg) = l.luabase.get_number(luaStackPos);
 			// case FUNCREF:
 			// 	@push_function(l, (M3Function*)arg);
 			// 	break;
@@ -374,14 +433,18 @@ fn int link_raw_function(gmod::LuaState* l) {
 	@is_string(l, 2);
 	@is_string(l, 3);
 	@is_string(l, 4);
-	@is_function(l, 5);
+	l.luabase.check_type(5, (int)gmod::Types.FUNCTION);
 	M3Module* mod = @get_module(l, 1);
 	char* moduleName = l.luabase.get_string(2, null);
 	char* functionName = l.luabase.get_string(3, null);
 	char* signature = l.luabase.get_string(4, null);
 	int funcRef = l.luabase.reference_create();
-	M3Result result = mod.link_raw_function_ex(moduleName, functionName, signature, &rawfunc, (void*)(iptr)funcRef);
-	if (result == null) {
+	gmod_wasm::@log(l, "linking fn %i as %s.%s of sig %s", funcRef, moduleName, functionName, signature);
+	M3FunctionUserdata* fnUdata = mem::new(M3FunctionUserdata); //TODO: cleanup on runtime close? 
+	fnUdata.runtimeUserdata = mod.get_runtime().get_user_data();
+	fnUdata.functionReference = funcRef;
+	M3Result result = mod.link_raw_function_ex(moduleName, functionName, signature, &rawfunc, (void*)fnUdata);
+	if (result != null) {
 		l.luabase.throw_error(result);
 	}
 	return 0;
@@ -423,7 +486,7 @@ fn int find_function_in(gmod::LuaState* l) {
 		return 2;
 	}
 	@push_function(l, func);
-	return 0;
+	return 1;
 }
 fn int find_global(gmod::LuaState* l) {
 	@is_module(l, 1);

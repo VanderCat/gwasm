@@ -320,11 +320,14 @@ macro @ptr_to_offset(ptr){
     return (uint)((char*)ptr - (char*)_mem);
 }
 
-macro @get_arg($Type, _sp, idx){
-    retur ($Type::size >= uint::size) ? (*(($Type *)(_sp[idx]))) : (($Type)(uptr)(*((uint *)(_sp[idx]))));
+macro @get_arg($Type, idx){
+	if ($Type::size < uint::size) {
+		return *($Type*)_sp[idx]; //dereference a pointer
+	} 
+	return ($Type)*(uint*)_sp[idx]; // dereference a pointer to uint and convert it to type
 }
 
-macro @get_arg_mem($Type, _sp, idx) {
+macro @get_arg_mem($Type) {
     return @offset_to_ptr(*((uint*)(_sp[idx])));
 }
 

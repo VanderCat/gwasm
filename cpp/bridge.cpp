@@ -356,8 +356,8 @@ EXTERN const char* gmod__lua_interface__get_path_id(ILuaInterface* self) BODY({
 // EXTERN void gmod__lua_interface__ErrorNoHalt(ILuaInterface* self, const char* fmt) BODY({
 //     return self->ErrorNoHalt(fmt);
 // })
-EXTERN void gmod__lua_interface__msg(ILuaInterface* self, const char* fmt) BODY({
-    return self->Msg(fmt);
+EXTERN void gmod__lua_interface__msg(ILuaInterface* self, const char* str) BODY({
+    return self->Msg("%s", str);
 })
 EXTERN void gmod__lua_interface__push_path(ILuaInterface* self, const char* path) BODY({
     return self->PushPath(path);
@@ -399,7 +399,7 @@ EXTERN const char* gmod__lua_interface__get_current_location(ILuaInterface* self
     return self->GetCurrentLocation();
 })
 EXTERN void gmod__lua_interface__msg_colour(ILuaInterface* self, const Color* col, const char* fmt) BODY({
-    return self->MsgColour(*col, fmt);
+    return self->MsgColour(*col, "%s", fmt);
 })
 // void gmod__lua_interface__GetCurrentFile(ILuaInterface* self, char** outStr) BODY({
 //     std::string meow = "";
