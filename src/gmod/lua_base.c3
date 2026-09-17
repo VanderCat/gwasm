@@ -34,7 +34,7 @@ extern fn void LuaBase.remove(gmod::LuaBase* self, int iStackPos) @cname("gmod__
 // lua_next
 extern fn int LuaBase.next(gmod::LuaBase* self, int iStackPos) @cname("gmod__lua_base__next");
 // luaL_error
-extern fn void LuaBase.throw_error(gmod::LuaBase* self, char* strError) @cname("gmod__lua_base__throw_error");
+extern fn void LuaBase.throw_error(gmod::LuaBase* self, char* strError) @noreturn @cname("gmod__lua_base__throw_error");
 // custom
 extern fn void LuaBase.check_type(gmod::LuaBase* self, int iStackPos, int iType) @cname("gmod__lua_base__check_type");
 // luaL_argerror

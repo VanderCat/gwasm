@@ -112,6 +112,9 @@ fn int parse_module(gmod::LuaState* l) {
 	@push_error(l, result);
 	return 2;
 }
+macro @assert(gmod::LuaState* l, bool arg, char* error) {
+	if (!arg) l.luabase.throw_error(error);
+}
 macro @is_runtime(gmod::LuaState* l, int stackPos) {
 	l.luabase.check_type(stackPos, runtime_type);
 }
@@ -130,14 +133,20 @@ macro @is_bool(gmod::LuaState* l, int stackPos) {
 macro @is_string(gmod::LuaState* l, int stackPos) {
 	l.luabase.check_type(stackPos, (int)gmod::Types.STRING);
 }
-macro @get_runtime(gmod::LuaState* l, int stackPos) {
-	return (M3Runtime*)l.luabase.get_user_type(stackPos, runtime_type);
+macro M3Runtime* @get_runtime(gmod::LuaState* l, int stackPos) {
+	M3Runtime* runtime = (M3Runtime*)l.luabase.get_user_type(stackPos, runtime_type);
+	@assert(l, runtime != null, "lua received null module");
+	return runtime;
 }
-macro @get_module(gmod::LuaState* l, int stackPos) {
-	return (M3Module*)l.luabase.get_user_type(stackPos, module_type);
+macro M3Module* @get_module(gmod::LuaState* l, int stackPos) {
+	M3Module* mod = (M3Module*)l.luabase.get_user_type(stackPos, module_type);
+	@assert(l, mod != null, "lua received null module");
+	return mod;
 }
-macro @get_function(gmod::LuaState* l, int stackPos) {
-	return (M3Function*)l.luabase.get_user_type(stackPos, function_type);
+macro M3Function* @get_function(gmod::LuaState* l, int stackPos) {
+	M3Function* func = (M3Function*)l.luabase.get_user_type(stackPos, function_type);
+	@assert(l, func != null, "lua received null function");
+	return func;
 }
 macro @get_global(gmod::LuaState* l, int stackPos) {
 	return (M3Global*)l.luabase.get_user_type(stackPos, global_type);
@@ -340,13 +349,11 @@ fn int find_exported_memory(gmod::LuaState* l) {
 	@is_module(l, 1);
 	M3Module* mod = @get_module(l, 1);
 	l.luabase.throw_error("not implemented");
-	return 0;
 }
 fn int bind_import_memory(gmod::LuaState* l) {
 	@is_module(l, 1);
 	M3Module* mod = @get_module(l, 1);
 	l.luabase.throw_error("not implemented");
-	return 0;
 }
 fn int run_start(gmod::LuaState* l) {
 	@is_module(l, 1);
@@ -373,6 +380,7 @@ fn int compile(gmod::LuaState* l) {
 fn void* rawfunc(M3Runtime* runtime, M3ImportContext* _ctx, ulong* _sp, void* _mem) {
 	M3FunctionUserdata* udata = _ctx.userdata; //does it change the userdata outside of function calling scope?
 	gmod::LuaState* l = udata.runtimeUserdata.state;
+	gmod_wasm::@log(l, "hello :3");
 	uint iArgs = _ctx.function.get_arg_count();
 	uint iRets = _ctx.function.get_ret_count();
 	for (uint i = 0; i < iArgs; i += 1) {
@@ -452,7 +460,6 @@ fn int link_raw_function(gmod::LuaState* l) {
 fn int link_global(gmod::LuaState* l) {
 	@is_module(l, 1);
 	l.luabase.throw_error("not implemented");
-	return 0;
 }
 fn int get_name(gmod::LuaState* l) {
 	@is_module(l, 1);
@@ -594,9 +601,79 @@ fn int get_ret_type(gmod::LuaState* l) {
 fn int call(gmod::LuaState* l) {
 	@is_function(l, 1);
 	M3Function* arg = @get_function(l, 1);
+
 	int args = l.luabase.top();
-	l.luabase.throw_error("not implemented");
-	return 0;
+	uint wasmArgCount = arg.get_arg_count(); 
+	if ((uint)args-1 != wasmArgCount) {
+		l.luabase.throw_error("paramater count mismatch");
+	}
+	gmod_wasm::@log(l, "calling wasm function with %s args", wasmArgCount);
+	ulong[] argBuf = mem::new_array(ulong, wasmArgCount);
+	defer mem::free(argBuf);
+	void*[] argPtrs = mem::new_array(void*, wasmArgCount);
+	defer mem::free(argPtrs);
+	for (int i = 0; i < (int)wasmArgCount; i += 1) {
+		argPtrs[i]=&argBuf[i];
+		M3ValueType t = arg.get_arg_type((uint)i);
+		gmod_wasm::@log(l, "the stack under %s is %s", i+2, l.luabase.get_number(i+2));
+		switch (t) {
+			case I32:
+				*((int*)argPtrs[i]) = (int)l.luabase.get_number(i+2);
+			case I64:
+				*((long*)argPtrs[i]) = (long)l.luabase.get_number(i+2);
+			case F32:
+				*((float*)argPtrs[i]) = (float)l.luabase.get_number(i+2);
+			case F64:
+				*((double*)argPtrs[i]) = l.luabase.get_number(i+2);
+			// case FUNCREF:
+			// 	@push_function(l, (M3Function*)arg);
+			// 	break;
+			default:
+				gmod_wasm::@log(l, "unsupported arg! got %s", t);
+		}
+		
+	}
+	gmod_wasm::@log(l, "constructed args, %s", argPtrs);
+	M3Result res = arg.call(argPtrs.len, argPtrs.ptr);
+	if (res != null) {
+		gmod_wasm::@log(l, "call failed!");
+		l.luabase.throw_error(res);
+	}
+	gmod_wasm::@log(l, "call succeeded");
+	uint retcount = arg.get_ret_count();
+
+    ulong[] valbuff = mem::new_array(ulong, retcount);
+	defer mem::free(valbuff);
+    void*[] resultPtrs = mem::new_array(void*, retcount);
+	defer mem::free(resultPtrs);
+    for (uint i = 0; i < retcount; i++) {
+        resultPtrs[i] = &valbuff[i];
+    }
+    res = arg.get_results(retcount, resultPtrs.ptr);
+    if (res != null) {
+		gmod_wasm::@log(l, "get results failed!");
+		l.luabase.throw_error(res);
+	}
+	gmod_wasm::@log(l, "results: %s", resultPtrs);
+	for (int i = 0; i < (int)retcount; i += 1) {
+		M3ValueType t = arg.get_ret_type((uint)i);
+		switch (t) {
+			case I32:
+				l.luabase.push_number((*(int*)resultPtrs[i]));
+			case I64:
+				l.luabase.push_number((*(long*)resultPtrs[i]));
+			case F32:
+				l.luabase.push_number((*(float*)resultPtrs[i]));
+			case F64:
+				l.luabase.push_number((*(double*)resultPtrs[i]));
+			// case FUNCREF:
+			// 	@push_function(l, (M3Function*)arg);
+			// 	break;
+			default:
+				gmod_wasm::@log(l, "unsupported arg! got %s", t);
+		}
+	}
+	return (int)retcount;
 }
 fn int get_function_name(gmod::LuaState* l) {
 	@is_function(l, 1);
@@ -664,12 +741,10 @@ fn int get_value(gmod::LuaState* l) {
 fn int set_value(gmod::LuaState* l) {
 	@is_global(l, 1);
 	l.luabase.throw_error("not implemented");
-	return 0;
 }
 fn int get_type(gmod::LuaState* l) {
 	@is_global(l, 1);
 	l.luabase.throw_error("not implemented");
-	return 0;
 }
 int global_type = 0;
 fn void create_global_metatable(gmod::LuaState* l) {

@@ -284,12 +284,12 @@ extern fn M3ValueType M3Function.get_ret_type(M3Function* i_function, uint i_ind
 
 extern fn M3Result M3Function.call_v(M3Function* i_function, ...) @cname("m3_CallV");
 extern fn M3Result M3Function.call_vl(M3Function* i_function, CVaList i_args) @cname("m3_CallVL");
-extern fn M3Result M3Function.call(M3Function* i_function, uint i_argc, void*[] i_argptrs) @cname("m3_Call");
-extern fn M3Result M3Function.call_argv(M3Function* i_function, uint i_argc, char*[] i_argv) @cname("m3_CallArgv");
+extern fn M3Result M3Function.call(M3Function* i_function, uint i_argc, void** i_argptrs) @cname("m3_Call");
+extern fn M3Result M3Function.call_argv(M3Function* i_function, uint i_argc, char** i_argv) @cname("m3_CallArgv");
 
 extern fn M3Result M3Function.get_results_v(M3Function* i_function, ...) @cname("m3_GetResultsV");
 extern fn M3Result M3Function.get_results_vl(M3Function* i_function, CVaList o_rets) @cname("m3_GetResultsVL");
-extern fn M3Result M3Function.get_results(M3Function* i_function, uint i_retc, void*[] o_retptrs) @cname("m3_GetResults");
+extern fn M3Result M3Function.get_results(M3Function* i_function, uint i_retc, void** o_retptrs) @cname("m3_GetResults");
 
 
 extern fn void M3Runtime.get_error_info(M3Runtime* i_runtime, M3ErrorInfo* o_info) @cname("m3_GetErrorInfo");
